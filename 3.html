@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PUZZLE 3 // ROTARY LINE</title>
+<style>
+  :root{
+    --bg0:#04090d;
+    --bg1:#07131b;
+    --panel:rgba(6, 16, 22, 0.80);
+    --line:rgba(120, 255, 210, 0.32);
+    --text:rgba(225, 255, 245, 0.92);
+    --muted:rgba(225, 255, 245, 0.66);
+    --accent:rgba(255, 210, 130, 0.92);
+    --ok:rgba(150, 255, 190, 0.95);
+    --bad:rgba(255, 120, 140, 0.95);
+  }
+
+  *{box-sizing:border-box}
+  html, body{
+    margin:0;
+    height:100%;
+    font-family:"Courier New", Courier, monospace;
+    color:var(--text);
+    background:
+      radial-gradient(900px 600px at 25% 30%, rgba(120,255,210,0.07), transparent 60%),
+      radial-gradient(800px 700px at 75% 80%, rgba(255,210,130,0.06), transparent 55%),
+      linear-gradient(180deg, var(--bg1), var(--bg0));
+  }
+
+  /* CRT scanlines + flicker */
+  #scan{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.00),
+      rgba(255,255,255,0.00) 2px,
+      rgba(255,255,255,0.03) 3px
+    );
+    opacity:0.35;
+    mix-blend-mode:overlay;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    #scan{animation:flicker 3.2s infinite}
+    @keyframes flicker{
+      0%,100%{opacity:0.18}
+      45%{opacity:0.40}
+      52%{opacity:0.12}
+      70%{opacity:0.33}
+    }
+  }
+
+  .wrap{
+    height:100%;
+    display:grid;
+    place-items:center;
+    padding:18px;
+  }
+
+  .console{
+    width:min(980px, 100%);
+    border:1px solid var(--line);
+    background: var(--panel);
+    padding:16px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.45) inset;
+  }
+
+  .top{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:12px;
+    border-bottom:1px dashed rgba(120,255,210,0.22);
+    padding-bottom:10px;
+    margin-bottom:12px;
+  }
+  .title{
+    margin:0;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+  }
+  .meta{
+    font-size:12px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    white-space:nowrap;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap:14px;
+    align-items:start;
+  }
+  @media (max-width: 880px){
+    .grid{grid-template-columns:1fr}
+  }
+
+  .panel{
+    border:1px solid rgba(120,255,210,0.25);
+    background: rgba(0,0,0,0.32);
+    padding:14px;
+  }
+
+  .small{
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.45;
+    white-space:pre-line;
+  }
+
+  .hintBox{
+    margin-top:10px;
+    border:1px dashed rgba(120,255,210,0.22);
+    background: rgba(0,0,0,0.35);
+    padding:10px;
+  }
+  .hintTitle{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .hintWord{
+    font-size:18px;
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    color: rgba(225,255,245,0.92);
+  }
+
+  /* Phone */
+  .phoneWrap{
+    display:grid;
+    gap:12px;
+  }
+
+  .dialPlate{
+    position:relative;
+    width:100%;
+    aspect-ratio: 1 / 1;
+    border:1px solid rgba(120,255,210,0.25);
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,0.08), transparent 55%),
+      radial-gradient(circle at 70% 80%, rgba(0,0,0,0.55), transparent 55%);
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+  }
+
+  .ring{
+    position:absolute;
+    inset:10%;
+    border-radius:999px;
+    border:1px dashed rgba(120,255,210,0.18);
+  }
+
+  .stopper{
+    position:absolute;
+    right:12%;
+    bottom:18%;
+    width:44px;
+    height:12px;
+    border:1px solid rgba(255,210,130,0.35);
+    background: rgba(255,210,130,0.10);
+  }
+
+  .dialFace{
+    position:absolute;
+    inset:0;
+    border-radius:999px;
+    transform: rotate(0deg);
+    transition: transform 120ms linear;
+  }
+
+  .digit{
+    position:absolute;
+    width:46px;
+    height:46px;
+    border-radius:999px;
+    border:1px solid rgba(120,255,210,0.22);
+    background: rgba(0,0,0,0.30);
+    display:grid;
+    place-items:center;
+    cursor:pointer;
+    user-select:none;
+    color: var(--text);
+    font-size:14px;
+  }
+  .digit:hover{ border-color: rgba(255,210,130,0.45); }
+
+  .digit small{
+    display:block;
+    font-size:10px;
+    color: var(--muted);
+    letter-spacing:0.3px;
+    margin-top:2px;
+  }
+
+  .center{
+    width:44%;
+    height:44%;
+    border-radius:999px;
+    border:1px solid rgba(120,255,210,0.20);
+    background: rgba(0,0,0,0.45);
+    display:grid;
+    place-items:center;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    font-size:12px;
+    color: rgba(225,255,245,0.78);
+  }
+
+  .display{
+    border:1px solid rgba(120,255,210,0.22);
+    background: rgba(0,0,0,0.42);
+    padding:10px;
+    font-size:12px;
+    color: rgba(225,255,245,0.84);
+    line-height:1.45;
+    white-space:pre-wrap;
+    min-height:72px;
+  }
+
+  .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  button{
+    font: inherit;
+    padding:10px 12px;
+    border:1px solid rgba(120,255,210,0.30);
+    background: rgba(0,0,0,0.25);
+    color: var(--text);
+    cursor:pointer;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    font-size:12px;
+  }
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:0.5; cursor:not-allowed;}
+
+  .status{
+    margin-top:8px;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    color: var(--muted);
+    min-height:18px;
+  }
+
+  /* Letter modal */
+  .modalBack{
+    position:fixed;
+    inset:0;
+    background: rgba(0,0,0,0.80);
+    display:none;
+    place-items:start;
+    padding:18px;
+    z-index:10;
+    overflow-y:auto;
+  }
+  .modal{
+    width:min(820px, 100%);
+    border:1px solid rgba(120,255,210,0.35);
+    background: rgba(0,0,0,0.90);
+    padding:14px;
+    margin:auto;
+  }
+  .mHead{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-bottom:1px dashed rgba(120,255,210,0.22);
+    padding-bottom:10px;
+    margin-bottom:10px;
+    gap:10px;
+  }
+  .mTitle{
+    margin:0;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+  }
+  .mHint{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .letter{
+    white-space:pre-wrap;
+    line-height:1.6;
+    font-size:14px;
+    color: var(--text);
+  }
+  .revealBlock{
+    margin-top:16px;
+    border-top:1px dashed rgba(120,255,210,0.22);
+    padding-top:14px;
+    display:none;
+  }
+  .revealLabel{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:rgba(225,255,245,0.55);
+    margin-bottom:8px;
+  }
+  .revealPhoto{
+    width:100%;
+    aspect-ratio:16/9;
+    border:1px dashed rgba(120,255,210,0.28);
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(120,255,210,0.03),
+      rgba(120,255,210,0.03) 1px,
+      transparent 1px,
+      transparent 14px
+    );
+    display:grid;
+    place-items:center;
+    position:relative;
+    overflow:hidden;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:rgba(225,255,245,0.45);
+    text-align:center;
+    padding:10px;
+  }
+  .revealPhoto img{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  .revealPhotoCaption{
+    margin-top:6px;
+    font-size:11px;
+    color:rgba(225,255,245,0.45);
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+  }
+  .revealAudio{
+    margin-top:12px;
+  }
+  .revealAudioLabel{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:rgba(225,255,245,0.55);
+    margin-bottom:6px;
+  }
+  .revealAudio audio{
+    width:100%;
+    filter: grayscale(1) contrast(1.1);
+  }
+  .slipNote{
+    margin-top:10px;
+    border:1px dashed rgba(255,210,130,0.35);
+    padding:10px;
+    background: rgba(255,210,130,0.05);
+    font-size:12px;
+    color:rgba(255,210,130,0.92);
+    line-height:1.6;
+    white-space:pre-wrap;
+  }
+  .cursor{
+    display:inline-block;
+    width:10px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink{50%{opacity:0}}
+</style>
+</head>
+<body>
+<div id="scan"></div>
+
+<div class="wrap">
+  <main class="console">
+    <div class="top">
+      <h1 class="title">PUZZLE 3 // ROTARY LINE</h1>
+      <div class="meta" id="clock">--:--:--</div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <p class="small">A rotary phone. Still on the desk.
+Still connected to something that shouldn’t exist.
+
+Dial the number.</p>
+
+        <div class="hintBox">
+          <div class="hintTitle">HINT</div>
+          <div class="hintWord">ENCRYPTION</div>
+          <div class="small" style="margin-top:6px;">Use the letters under each digit. One letter → one number.</div>
+        </div>
+
+        <div class="phoneWrap" style="margin-top:12px;">
+          <div class="dialPlate" id="dialPlate" aria-label="Rotary dial">
+            <div class="ring"></div>
+            <div class="dialFace" id="dialFace"></div>
+            <div class="stopper" title="stopper"></div>
+            <div class="center">LINE</div>
+          </div>
+
+          <div class="display" id="display">READY.
+CLICK DIGITS TO DIAL.</div>
+
+          <div class="row">
+            <button id="callBtn">CALL</button>
+            <button id="clearBtn">CLEAR</button>
+          </div>
+
+          <div class="status" id="status"></div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <p class="small">Rules:
+- Dial one digit at a time.
+- The dial “returns” after each digit.
+- The line accepts a specific sequence.</p>
+
+        <p class="small" style="margin-top:12px;">Audio placeholders:
+replace the empty file names when you add your own sounds.</p>
+
+        <audio id="sfxTick" src="" preload="auto"></audio>
+        <audio id="sfxReturn" src="" preload="auto"></audio>
+        <audio id="sfxCall" src="" preload="auto"></audio>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- Letter modal -->
+<div class="modalBack" id="modalBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="mHead">
+      <p class="mTitle">VOICEMAIL // VM-017 — ELLSWORTH, T.</p>
+      <div class="mHint">Press <b>ESC</b> to close</div>
+    </div>
+    <div class="letter" id="letterBody"></div>
+
+    <div class="revealBlock" id="revealBlock">
+      <div class="revealLabel">Photograph — Location Identified</div>
+      <div class="revealPhoto" id="revealPhoto">
+        <!--
+          REPLACE WITH YOUR LOCATION PHOTO:
+          <img src="your-photo.jpg" alt="Location" />
+        -->
+          <img src="1774999482096.jpg" alt="Location" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />
+        [ REPLACE WITH LOCATION PHOTOGRAPH ]<br>
+        <span style="font-size:10px;opacity:0.6;">Set src= on the img tag above</span>
+      </div>
+      <div class="revealPhotoCaption">A physical slip of paper is hidden at this location.</div>
+
+      <div class="revealAudio">
+        <div class="revealAudioLabel">Voicemail Playback — VM-017</div>
+        <!--
+          REPLACE src="" WITH YOUR MP3 FILE:
+          e.g. src="ellsworth_voicemail.mp3"
+        -->
+        <audio id="vmAudio" controls src="" preload="auto"></audio>
+      </div>
+
+      <div class="slipNote">▸ NEXT STEP: Find the location shown above.
+  A slip of paper hidden there contains the code to the next puzzle.
+  Proceed to PUZZLE 4 // LOCKER 114.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // Clock
+  function tickClock(){ $("clock").textContent = new Date().toLocaleTimeString(); }
+  tickClock(); setInterval(tickClock, 1000);
+
+  // --- Rotary dial layout ---
+  const dialFace = $("dialFace");
+
+  // Classic phone letters (T9-style)
+  const DIGITS = ["1","2","3","4","5","6","7","8","9","0"];
+  const letters = {
+    "2":"ABC","3":"DEF","4":"GHI","5":"JKL","6":"MNO","7":"PQRS","8":"TUV","9":"WXYZ"
+  };
+
+  function makeDigits(){
+    dialFace.innerHTML = "";
+
+    const cx = 50, cy = 50; // %
+    const radius = 35;      // %
+    const startAngle = -60; // degrees
+
+    for (let i = 0; i < DIGITS.length; i++){
+      const d = DIGITS[i];
+
+      // spread around 300 degrees like a real dial (leaves a gap near stopper)
+      const ang = (startAngle + i * (300 / 9)) * (Math.PI/180);
+      const x = cx + radius * Math.cos(ang);
+      const y = cy + radius * Math.sin(ang);
+
+      const el = document.createElement("div");
+      el.className = "digit";
+      el.dataset.digit = d;
+      el.style.left = `calc(${x}% - 23px)`;
+      el.style.top  = `calc(${y}% - 23px)`;
+
+      const lab = letters[d] ? `<small>${letters[d]}</small>` : `<small>&nbsp;</small>`;
+      el.innerHTML = `${d}${lab}`;
+
+      el.addEventListener("click", () => dialDigit(d));
+      dialFace.appendChild(el);
+    }
+  }
+  makeDigits();
+
+  // --- Dial mechanics ---
+  let dialing = false;
+  let dialed = "";
+
+  const display = $("display");
+  const status = $("status");
+
+  function setDisplay(lines){ display.textContent = lines; }
+
+  function play(id){
+    const a = $(id);
+    if (!a) return;
+    try {
+      a.currentTime = 0;
+      const p = a.play();
+      if (p && p.catch) p.catch(()=>{});
+    } catch {}
+  }
+
+  // rotation degrees per digit (0 has most travel)
+  const ROT_MAP = { "1": 28, "2": 45, "3": 62, "4": 80, "5": 98, "6": 116, "7": 134, "8": 152, "9": 170, "0": 190 };
+
+  function dialDigit(d){
+    if (dialing) return;
+
+    dialing = true;
+    status.textContent = "";
+    play("sfxTick");
+
+    const deg = ROT_MAP[d] ?? 0;
+    dialFace.style.transform = `rotate(${deg}deg)`;
+
+    setTimeout(() => {
+      play("sfxReturn");
+      dialFace.style.transform = `rotate(0deg)`;
+    }, 220);
+
+    setTimeout(() => {
+      dialed += d;
+      setDisplay(`DIALED: ${dialed}\n(press CALL when ready)`);
+      dialing = false;
+    }, 520);
+  }
+
+  // --- Puzzle logic ---
+  // ENCRYPTION -> 3627978466
+  const SECRET_NUMBER = "3627978466";
+
+  function clearDial(){
+    dialed = "";
+    setDisplay("READY.\nCLICK DIGITS TO DIAL.");
+    status.textContent = "";
+  }
+  $("clearBtn").addEventListener("click", clearDial);
+
+  $("callBtn").addEventListener("click", () => {
+    if (dialing) return;
+    if (!dialed.length){
+      status.style.color = "var(--muted)";
+      status.textContent = "NO NUMBER DIALED.";
+      return;
+    }
+
+    play("sfxCall");
+
+    if (dialed === SECRET_NUMBER){
+      status.style.color = "var(--ok)";
+      status.textContent = "LINE ACCEPTED.";
+      openLetter();
+    } else {
+      status.style.color = "var(--bad)";
+      status.textContent = "LINE REJECTED.";
+    }
+  });
+
+  // --- Letter modal with typewriter ---
+  const modalBack = $("modalBack");
+  const letterBody = $("letterBody");
+  let typing = false;
+
+  const letterText =
+'Someone answers. It’s faint, distorted, but definitely a human voice.\n\n';
+
+  function openModal(){
+    modalBack.style.display = "grid";
+    modalBack.setAttribute("aria-hidden","false");
+  }
+  function closeModal(){
+    modalBack.style.display = "none";
+    modalBack.setAttribute("aria-hidden","true");
+    typing = false;
+  }
+
+  function typeText(text){
+    letterBody.textContent = "";
+    typing = true;
+    openModal();
+
+    let i = 0;
+    const cursor = document.createElement("span");
+    cursor.className = "cursor";
+    cursor.textContent = "_";
+
+    function step(){
+      if (!typing) return;
+      if (i < text.length){
+        letterBody.textContent += text.charAt(i);
+        const ch = text.charAt(i);
+        i++;
+        const delay = (ch === "\n") ? 70 : (ch === "." ? 85 : 22);
+        setTimeout(step, delay);
+      } else {
+        letterBody.appendChild(cursor);
+
+        // Reveal photo + audio after text finishes
+        const rb = document.getElementById("revealBlock");
+        rb.style.display = "block";
+
+        // Attempt autoplay (browser may block; controls still work)
+        const vm = document.getElementById("vmAudio");
+        if (vm && vm.src && !vm.src.endsWith("/")) {
+          const p = vm.play();
+          if (p && typeof p.catch === "function"){
+            p.catch(() => {});
+          }
+        }
+      }
+    }
+    step();
+  }
+
+  function openLetter(){ typeText(letterText); }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modalBack.style.display === "grid") closeModal();
+  });
+})();
+</script>
+</body>
+</html>
